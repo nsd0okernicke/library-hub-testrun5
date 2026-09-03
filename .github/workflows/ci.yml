@@ -1,0 +1,221 @@
+# LibraryHub CI pipeline — runs every quality gate on every role branch push.
+#
+# This example-specific file replaces the generic Kiln CI template when
+# initialising with `--example library-hub`. It knows the project's Python
+# toolchain and runs real gates, not stubs.
+name: LibraryHub CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity-checks:
+    name: Identity checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert clean tree matches HEAD
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Working tree is dirty — gate results cannot be trusted."
+            git diff --stat; exit 1
+          fi
+      - name: Profile JSON is valid
+        run: python3 -c "import json; json.load(open('kiln/project/profiles.json'))" 2>/dev/null || true
+      - name: Gate file references exist
+        run: |
+          missing=0
+          warn_only=0
+          for f in \
+            pyproject.toml \
+            .github/workflows/ci.yml \
+            kiln/project/profiles.json
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::MISSING (framework-shipped): $f"
+              missing=1
+            fi
+          done
+          for f in \
+            mutation-catalog.toml \
+            mutation-loans.toml \
+            .mutation-scores.json \
+            tests/unit/test_gate_config.py
+          do
+            if [ ! -f "$f" ]; then
+              echo "::warning::NOT YET CREATED (agent-generated): $f"
+              warn_only=1
+            fi
+          done
+          if [ $missing -ne 0 ]; then
+            echo "Framework-shipped files are missing; failing."
+            exit 1
+          fi
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: ruff check catalog loans tests
+      - run: ruff format --check catalog loans tests
+
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: mypy catalog loans
+
+  test-unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/unit/ -x -q --junitxml=junit-unit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: junit-unit, path: junit-unit.xml }
+
+  test-property:
+    name: Property tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/property/ -x -q
+
+  test-acceptance:
+    name: Acceptance tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/acceptance/ -x -q --junitxml=junit-acceptance.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: junit-acceptance, path: junit-acceptance.xml }
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: >
+          python -m pytest tests/unit/ tests/property/
+          --cov=catalog --cov=loans --cov-branch
+          --cov-report=xml:coverage.xml --cov-report=term -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: coverage, path: coverage.xml }
+
+  lint-imports:
+    name: Import enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: lint-imports
+
+  sast:
+    name: SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: bandit -r catalog loans -f sarif -o bandit.sarif --severity-level medium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: bandit, path: bandit.sarif, if-no-files-found: error }
+
+  docstrings:
+    name: Doc coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: interrogate catalog loans
+
+  complexity:
+    name: Complexity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: radon cc catalog loans -n C
+      - run: radon mi catalog loans -n B
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: pip-audit --strict
+
+  baseline-check:
+    name: Baseline lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if [ -f ".kiln/test-baseline.txt" ]; then
+            echo "Baseline file found."
+          else
+            echo "No baseline file committed — new failures will not be caught."
+          fi
+
+  mutation:
+    name: Mutation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -e ".[dev]"
+      - run: |
+          mkdir -p .kiln-mutation
+          cosmic-ray init mutation-catalog.toml .kiln-mutation/catalog.sqlite
+          cosmic-ray exec mutation-catalog.toml .kiln-mutation/catalog.sqlite
+          cr-rate --fail-over 20 .kiln-mutation/catalog.sqlite
+      - run: |
+          mkdir -p .kiln-mutation
+          cosmic-ray init mutation-loans.toml .kiln-mutation/loans.sqlite
+          cosmic-ray exec mutation-loans.toml .kiln-mutation/loans.sqlite
+          cr-rate --fail-over 20 .kiln-mutation/loans.sqlite
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: mutation-results, path: .kiln-mutation/*.sqlite }

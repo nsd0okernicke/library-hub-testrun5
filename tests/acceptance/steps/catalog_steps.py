@@ -21,12 +21,6 @@ def _description(value: str) -> str | None:
     return None if value in ("(none)", "None") else value
 
 
-@given("the catalog service is running")
-def catalog_service_running(client):
-    """Background: the TestClient is wired to the catalog service by the fixture."""
-    assert client is not None
-
-
 CATALOG_SEED = [
     ("978-0-20-163361-0", "Dune", "Frank Herbert", "Sci-Fi", 3),
     ("978-0-13-468599-1", "Refactoring", "Martin Fowler", "Software", 2),
@@ -132,21 +126,6 @@ def books_include_all_fields(scenario_state):
 @then(parsers.parse("the total result count is {total:d}"))
 def total_result_count(scenario_state, total):
     assert scenario_state["response"].json()["total"] == total
-
-
-@given(parsers.parse("a book with ISBN {isbn} is already registered"))
-def book_already_registered(client, isbn):
-    response = client.post(
-        "/books",
-        json={
-            "isbn": isbn,
-            "title": "Already There",
-            "author": "Some Author",
-            "genre": "Mystery",
-            "stock": 3,
-        },
-    )
-    assert response.status_code == 201, response.text
 
 
 @when(

@@ -107,6 +107,17 @@ class TestSqlAlchemyBookRepository:
             rows = session.execute(select(BookModel)).scalars().all()
         assert len(rows) == 1
 
+    def test_re_save_with_same_isbn_updates_the_existing_row(self) -> None:
+        repository = _seeded_repository()
+        existing = repository.get_by_isbn("978-0-20-163361-0")
+        assert existing is not None
+        repository.save(existing.add_copies(2))
+        fetched = repository.get_by_isbn("978-0-20-163361-0")
+        assert fetched is not None
+        assert fetched.stock == 5
+        assert fetched.title == "Dune"
+        assert repository.count_by_isbn("978-0-20-163361-0") == 1
+
 
 class TestSqlAlchemyBookRepositorySearch:
     def test_no_filters_returns_all_books_sorted_by_title_ascending(self) -> None:

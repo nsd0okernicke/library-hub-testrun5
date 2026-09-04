@@ -1,6 +1,6 @@
 """Book catalog domain model."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -20,3 +20,12 @@ class Book:
             raise ValueError("ISBN must not be blank")
         if self.stock < 0:
             raise ValueError(f"Stock must not be negative, got {self.stock}")
+
+    def add_copies(self, amount: int) -> "Book":
+        """Return a new Book with `amount` copies added to the stock.
+
+        Metadata is preserved. Raises ValueError when amount is not positive.
+        """
+        if amount <= 0:
+            raise ValueError(f"Added copies must be a positive whole number, got {amount}")
+        return replace(self, stock=self.stock + amount)

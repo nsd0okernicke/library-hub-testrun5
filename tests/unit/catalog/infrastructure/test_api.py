@@ -1,5 +1,6 @@
 """Unit tests for the catalog FastAPI application (fake repository, no I/O)."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from catalog.domain.book import Book
@@ -278,3 +279,63 @@ class TestCheckAvailabilityApi:
         body = self.client.get("/books/978-1-40-289462-6/availability").json()
         assert "isbn" not in body
         assert "available_count" not in body
+
+
+class TestStockReturnApi:
+    def setup_method(self) -> None:
+        self.repository = InMemoryBookRepository()
+        self.app = create_app(self.repository)
+        self.client = TestClient(self.app)
+        self.book = Book(
+            isbn="978-0-20-163361-0",
+            title="Dune",
+            author="Frank Herbert",
+            genre="Sci-Fi",
+            description="Arrakis saga",
+            stock=3,
+        )
+        self.repository.save(self.book)
+
+    def test_stock_return_returns_200_with_updated_stock(self) -> None:
+        response = self.client.post("/books/978-0-20-163361-0/stock-returns", json={"copies": 2})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["stock"] == 5
+        assert body["title"] == "Dune"
+        assert body["author"] == "Frank Herbert"
+        assert body["genre"] == "Sci-Fi"
+        assert self.repository.get_by_isbn("978-0-20-163361-0").stock == 5
+
+    def test_stock_return_from_zero_stock(self) -> None:
+        self.repository.save(
+            Book(
+                isbn="978-3-16-148410-0",
+                title="The Hobbit",
+                author="J.R.R. Tolkien",
+                genre="Fantasy",
+                description=None,
+                stock=0,
+            )
+        )
+        response = self.client.post("/books/978-3-16-148410-0/stock-returns", json={"copies": 5})
+        assert response.status_code == 200
+        assert response.json()["stock"] == 5
+
+    def test_stock_return_of_unknown_isbn_returns_404(self) -> None:
+        response = self.client.post("/books/978-1-40-289462-6/stock-returns", json={"copies": 3})
+        assert response.status_code == 404
+        assert "isbn" not in response.json()
+
+    @pytest.mark.parametrize("copies", [0, -2])
+    def test_non_positive_copies_returns_422_and_leaves_book_unchanged(self, copies: int) -> None:
+        response = self.client.post(
+            "/books/978-0-20-163361-0/stock-returns", json={"copies": copies}
+        )
+        assert response.status_code == 422
+        assert self.repository.get_by_isbn("978-0-20-163361-0").stock == 3
+
+    def test_stock_return_does_not_publish_or_touch_loans(self) -> None:
+        """The endpoint only returns book data; the response has no loan fields."""
+        response = self.client.post("/books/978-0-20-163361-0/stock-returns", json={"copies": 1})
+        body = response.json()
+        assert set(body) == {"isbn", "title", "author", "genre", "description", "stock"}

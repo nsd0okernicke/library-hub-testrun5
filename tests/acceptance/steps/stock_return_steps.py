@@ -39,16 +39,21 @@ def book_with_stock_is_registered(client, isbn, title, author, genre, stock):
     _register(client, isbn, title, author, genre, stock)
 
 
-@given(parsers.parse("a book with ISBN {isbn} is registered"))
+@given(parsers.re(r"a book with ISBN (?P<isbn>[0-9][0-9-]*) is registered"))
 def book_is_registered(client, isbn):
     """Given: register a book with default metadata and stock 1."""
     _register(client, isbn, f"Book {isbn}", "Some Author", "Fiction", 1)
 
 
-@given(parsers.parse("a book with ISBN {isbn} is registered with stock {stock:d}"))
+_REGISTERED_WITH_STOCK = (
+    r"a book with ISBN (?P<isbn>[0-9][0-9-]*) is registered with stock (?P<stock>\d+)"
+)
+
+
+@given(parsers.re(_REGISTERED_WITH_STOCK))
 def book_is_registered_with_stock(client, isbn, stock):
     """Given: register a book with default metadata and explicit stock."""
-    _register(client, isbn, f"Book {isbn}", "Some Author", "Fiction", stock)
+    _register(client, isbn, f"Book {isbn}", "Some Author", "Fiction", int(stock))
 
 
 @when(parsers.parse("an operator adds {copies:d} copies to the book with ISBN {isbn}"))

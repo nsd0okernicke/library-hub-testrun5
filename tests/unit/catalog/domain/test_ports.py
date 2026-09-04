@@ -12,7 +12,12 @@ class TestBookRepositoryPort:
         """The persistence port must not be instantiable, and every method
         must be abstract (a missing `@abstractmethod` on any one would
         leave the rest abstract by coincidence)."""
-        assert BookRepository.__abstractmethods__ == {"save", "get_by_isbn", "count_by_isbn"}
+        assert BookRepository.__abstractmethods__ == {
+            "save",
+            "get_by_isbn",
+            "count_by_isbn",
+            "search",
+        }
         with pytest.raises(TypeError):
             BookRepository()
 
@@ -21,3 +26,4 @@ class TestBookRepositoryPort:
         typing.get_type_hints(BookRepository.save)
         typing.get_type_hints(BookRepository.get_by_isbn)
         typing.get_type_hints(BookRepository.count_by_isbn)
+        typing.get_type_hints(BookRepository.search)

@@ -6,6 +6,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from catalog.domain.book import Book
 from catalog.domain.ports import BookRepository
+from catalog.domain.search import BookSearchCriteria, BookSearchResult
 
 
 class Base(DeclarativeBase):
@@ -40,6 +41,7 @@ class SqlAlchemyBookRepository(BookRepository):
     """BookRepository backed by a SQLAlchemy engine (one session per call)."""
 
     def __init__(self, engine: Engine) -> None:
+        """Store the SQLAlchemy engine used for persistence."""
         self._engine = engine
 
     def save(self, book: Book) -> None:
@@ -67,3 +69,29 @@ class SqlAlchemyBookRepository(BookRepository):
             return session.execute(
                 select(func.count()).select_from(BookModel).where(BookModel.isbn == isbn)
             ).scalar_one()
+
+    def search(self, criteria: BookSearchCriteria) -> BookSearchResult:
+        """Search books: case-insensitive substring filters (AND), title ascending, paginated."""
+        conditions = []
+        if criteria.title is not None:
+            conditions.append(BookModel.title.ilike(f"%{criteria.title}%"))
+        if criteria.author is not None:
+            conditions.append(BookModel.author.ilike(f"%{criteria.author}%"))
+        if criteria.genre is not None:
+            conditions.append(BookModel.genre.ilike(f"%{criteria.genre}%"))
+
+        query = select(BookModel)
+        if conditions:
+            query = query.where(*conditions)
+
+        with Session(self._engine) as session:
+            total = session.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+            start = (criteria.page - 1) * criteria.page_size
+            rows = (
+                session.execute(
+                    query.order_by(BookModel.title.asc()).limit(criteria.page_size).offset(start)
+                )
+                .scalars()
+                .all()
+            )
+            return BookSearchResult(items=[row.to_domain() for row in rows], total_count=total)

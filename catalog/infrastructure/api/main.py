@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 
 from catalog.application.create_book import CreateBook
 from catalog.application.retrieve_book import RetrieveBook
+from catalog.application.search_books import SearchBooks
 from catalog.domain.book import Book
 from catalog.domain.exceptions import BookAlreadyExists, BookNotFound
 from catalog.domain.ports import BookRepository
@@ -42,6 +43,31 @@ def create_app(repository: BookRepository) -> FastAPI:
     app = FastAPI(title="Catalog Service")
     create_book = CreateBook(repository)
     retrieve_book = RetrieveBook(repository)
+    search_books = SearchBooks(repository)
+
+    @app.get("/books")
+    def search_books_endpoint(
+        title: str | None = None,
+        author: str | None = None,
+        genre: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, object]:
+        """Search books by optional case-insensitive substring filters, paginated."""
+        try:
+            result = search_books(
+                title=title or None,
+                author=author or None,
+                genre=genre or None,
+                page=page,
+                page_size=page_size,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "total": result.total_count,
+            "books": [_book_payload(book) for book in result.items],
+        }
 
     @app.get("/books/{isbn}")
     def retrieve_book_endpoint(isbn: str) -> dict[str, object]:

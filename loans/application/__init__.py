@@ -1,0 +1,1 @@
+"""Loans application use cases."""

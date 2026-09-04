@@ -1,5 +1,6 @@
 """Unit tests for the ApplyBookReturnedEvent use case (CAT-4)."""
 
+import typing
 from dataclasses import replace
 from unittest.mock import Mock
 
@@ -116,3 +117,10 @@ def test_event_requires_an_isbn() -> None:
     """A returned event without an ISBN cannot be applied."""
     with pytest.raises(ValueError):
         BookReturnedEvent(user_id="alice", isbn="   ")
+
+
+def test_return_annotation_is_book_or_none() -> None:
+    """The return annotation must evaluate (guards the `Book | None` union)."""
+    hints = typing.get_type_hints(ApplyBookReturnedEvent.__call__)
+
+    assert hints["return"] == Book | None

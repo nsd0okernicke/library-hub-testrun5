@@ -11,8 +11,10 @@ from loans.application.borrow_book import BorrowBook
 from loans.application.create_user import CreateUser
 from loans.application.decide_reservation import DecideReservation
 from loans.application.list_user_loans import ListUserLoans
+from loans.application.return_book import ReturnBook
 from loans.domain.exceptions import (
     EmailAlreadyRegistered,
+    LoanNotActive,
     LoanNotFound,
     LoanNotPending,
     UserNotFound,
@@ -99,6 +101,7 @@ def create_app(
     create_user = CreateUser(user_repository)
     borrow_book = BorrowBook(user_repository, loan_repository, event_publisher)
     list_user_loans = ListUserLoans(loan_repository)
+    return_book = ReturnBook(loan_repository, event_publisher)
 
     @app.post("/users", status_code=201)
     def create_user_endpoint(request: CreateUserRequest) -> dict[str, str]:
@@ -137,6 +140,17 @@ def create_app(
         except LoanNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except LoanNotPending as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return _loan_payload(loan)
+
+    @app.post("/loans/{loan_id}/return")
+    def return_endpoint(loan_id: str) -> dict[str, object]:
+        """Return the book of an ACTIVE loan (404 unknown, not ACTIVE: 409)."""
+        try:
+            loan = return_book(loan_id=loan_id)
+        except LoanNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except LoanNotActive as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return _loan_payload(loan)
 

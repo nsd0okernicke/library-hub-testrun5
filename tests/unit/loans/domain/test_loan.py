@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from loans.domain.exceptions import LoanNotPending
+from loans.domain.exceptions import LoanNotActive, LoanNotPending
 from loans.domain.loan import Loan, LoanStatus, ReservationDecision, utc_now
 
 
@@ -126,6 +126,49 @@ class TestLoanTransitionGuards:
     def test_pending_loan_can_transition(self) -> None:
         assert _pending_loan().activate(due_date_term_days=7).status is LoanStatus.ACTIVE
         assert _pending_loan().reject().status is LoanStatus.REJECTED
+
+
+class TestLoanReturn:
+    def test_return_sets_status_returned_and_clears_due_date(self) -> None:
+        loan = _pending_loan().activate(due_date_term_days=28)
+        returned = loan.mark_returned()
+        assert returned.status is LoanStatus.RETURNED
+        assert returned.due_date is None
+        assert returned.loan_id == loan.loan_id
+        assert returned.user_id == loan.user_id
+        assert returned.isbn == loan.isbn
+        assert returned.created_at == loan.created_at
+
+    def test_return_does_not_mutate_the_original(self) -> None:
+        loan = _pending_loan().activate(due_date_term_days=28)
+        loan.mark_returned()
+        assert loan.status is LoanStatus.ACTIVE
+        assert loan.due_date is not None
+
+    def test_return_of_active_loan_overdue_is_allowed(self) -> None:
+        created = datetime(2026, 1, 1)
+        loan = _pending_loan(created_at=created).activate(due_date_term_days=28)
+        returned = loan.mark_returned()
+        assert returned.status is LoanStatus.RETURNED
+
+
+class TestLoanReturnGuards:
+    def test_pending_loan_cannot_be_returned(self) -> None:
+        with pytest.raises(LoanNotActive):
+            _pending_loan().mark_returned()
+
+    def test_rejected_loan_cannot_be_returned(self) -> None:
+        with pytest.raises(LoanNotActive):
+            _pending_loan().reject().mark_returned()
+
+    def test_returned_loan_cannot_be_returned_again(self) -> None:
+        with pytest.raises(LoanNotActive):
+            _pending_loan().activate(due_date_term_days=28).mark_returned().mark_returned()
+
+    def test_returned_loan_cannot_be_redecided(self) -> None:
+        returned = _pending_loan().activate(due_date_term_days=28).mark_returned()
+        with pytest.raises(LoanNotPending):
+            returned.activate(due_date_term_days=28)
 
 
 class TestReservationDecision:

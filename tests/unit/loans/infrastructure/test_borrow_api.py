@@ -136,6 +136,65 @@ class TestGetLoanEndpoint:
         assert response.status_code == 200
         assert response.json()["status"] == "REJECTED"
 
+    def test_get_pending_loan_reports_details_without_due_date(self) -> None:
+        client, users, _, _ = _client()
+        users.save(User(user_id="usr-1", name="Alice", email="alice@example.com"))
+        created = client.post(
+            "/loans", json={"user_email": "alice@example.com", "isbn": "978-0-20-163361-0"}
+        )
+        response = client.get(f"/loans/{created.json()['loan_id']}")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["loan_id"] == created.json()["loan_id"]
+        assert body["user_id"] == "usr-1"
+        assert body["isbn"] == "978-0-20-163361-0"
+        assert body["status"] == "PENDING"
+        assert body.get("due_date") is None
+
+    def test_get_active_loan_reports_due_date_from_global_term(self) -> None:
+        user_repository = InMemoryUserRepository()
+        loan_repository = InMemoryLoanRepository()
+        app = create_app(
+            user_repository,
+            loan_repository,
+            publisher=RecordingPublisher(),
+            settings=LoanSettings(due_date_term_days=7),
+        )
+        client = TestClient(app)
+        user_repository.save(User(user_id="usr-1", name="Alice", email="alice@example.com"))
+        created = client.post(
+            "/loans", json={"user_email": "alice@example.com", "isbn": "978-0-20-163361-0"}
+        )
+        loan_id = created.json()["loan_id"]
+        client.post(f"/loans/{loan_id}/reservation", json={"decision": "ACTIVE"})
+        body = client.get(f"/loans/{loan_id}").json()
+        assert body["status"] == "ACTIVE"
+        delta = datetime.fromisoformat(body["due_date"]) - datetime.fromisoformat(
+            body["created_at"]
+        )
+        assert delta == timedelta(days=7)
+
+    def test_get_rejected_loan_reports_no_due_date(self) -> None:
+        client, users, _, _ = _client()
+        users.save(User(user_id="usr-1", name="Alice", email="alice@example.com"))
+        created = client.post(
+            "/loans", json={"user_email": "alice@example.com", "isbn": "978-0-20-163361-0"}
+        )
+        loan_id = created.json()["loan_id"]
+        client.post(f"/loans/{loan_id}/reservation", json={"decision": "REJECTED"})
+        body = client.get(f"/loans/{loan_id}").json()
+        assert body["status"] == "REJECTED"
+        assert body.get("due_date") is None
+
+    def test_get_unknown_loan_returns_404_with_no_loan_fields(self) -> None:
+        client, _, _, _ = _client()
+        response = client.get("/loans/no-such-loan-1")
+        assert response.status_code == 404
+        body = response.json()
+        assert "loan_id" not in body
+        assert "status" not in body
+        assert "due_date" not in body
+
 
 class TestReservationEndpoint:
     def test_active_decision_sets_due_date_from_global_term(self) -> None:

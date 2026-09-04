@@ -1,19 +1,23 @@
 """FastAPI application for the catalog service."""
 
 import os
+from collections.abc import Callable
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
+from catalog.application.apply_book_returned import ApplyBookReturnedEvent
 from catalog.application.check_availability import CheckBookAvailability
 from catalog.application.create_book import CreateBook
 from catalog.application.retrieve_book import RetrieveBook
 from catalog.application.return_stock import ManualStockReturn
 from catalog.application.search_books import SearchBooks
 from catalog.domain.book import Book
+from catalog.domain.events import BookReturnedEvent
 from catalog.domain.exceptions import BookAlreadyExists, BookNotFound
 from catalog.domain.ports import BookRepository
+from catalog.infrastructure.broker import InMemoryBroker
 from catalog.infrastructure.persistence import Base, SqlAlchemyBookRepository
 
 
@@ -46,14 +50,22 @@ def _book_payload(book: Book) -> dict[str, object]:
     }
 
 
-def create_app(repository: BookRepository) -> FastAPI:
-    """Build the catalog FastAPI application around the given repository."""
+def create_app(repository: BookRepository, broker: InMemoryBroker | None = None) -> FastAPI:
+    """Build the catalog FastAPI application around the given repository.
+
+    When a broker is given, the app subscribes to it and applies each
+    received book returned event to the catalog stock.
+    """
     app = FastAPI(title="Catalog Service")
     create_book = CreateBook(repository)
     retrieve_book = RetrieveBook(repository)
     check_book_availability = CheckBookAvailability(repository)
     search_books = SearchBooks(repository)
     stock_return = ManualStockReturn(repository)
+
+    if broker is not None:
+        apply_book_returned = ApplyBookReturnedEvent(repository)
+        broker.subscribe(_make_book_returned_handler(apply_book_returned))
 
     @app.get("/books")
     def search_books_endpoint(
@@ -136,6 +148,24 @@ def create_app(repository: BookRepository) -> FastAPI:
         return {"status": "ok"}
 
     return app
+
+
+def _make_book_returned_handler(
+    apply_book_returned: ApplyBookReturnedEvent,
+) -> Callable[[object], None]:
+    """Build the broker handler that applies book returned events.
+
+    The wire event comes from the loans service; only its ISBN matters here.
+    Events without an ISBN (foreign topics) are ignored.
+    """
+
+    def handle(event: object) -> None:
+        isbn = getattr(event, "isbn", None)
+        if not isinstance(isbn, str):
+            return
+        apply_book_returned(BookReturnedEvent(user_id="", isbn=isbn))
+
+    return handle
 
 
 def _default_repository() -> SqlAlchemyBookRepository:

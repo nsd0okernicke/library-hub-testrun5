@@ -12,6 +12,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 FEATURES_DIR = Path(__file__).resolve().parents[3] / "features"
 
 scenarios(str(FEATURES_DIR / "cat-3-create-book.feature"))
+scenarios(str(FEATURES_DIR / "cat-5-retrieve-book-by-isbn.feature"))
 
 
 def _description(value: str) -> str | None:
@@ -58,6 +59,68 @@ def create_book(client, scenario_state, isbn, title, author, genre, description,
             "stock": stock,
         },
     )
+
+
+@given(
+    parsers.parse(
+        "a book with ISBN {isbn}, title {title}, author {author}, "
+        "genre {genre}, description {description} and stock {stock:d} is registered"
+    )
+)
+def book_with_full_metadata_is_registered(client, isbn, title, author, genre, description, stock):
+    response = client.post(
+        "/books",
+        json={
+            "isbn": isbn,
+            "title": title,
+            "author": author,
+            "genre": genre,
+            "description": _description(description),
+            "stock": stock,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
+@when(parsers.parse("a book is retrieved by ISBN {isbn}"))
+def retrieve_book(client, scenario_state, isbn):
+    scenario_state["response"] = client.get(f"/books/{isbn}")
+
+
+@then(parsers.parse("the book is returned with status code {status:d}"))
+def retrieved_status(scenario_state, status):
+    response = scenario_state["response"]
+    assert response.status_code == status, response.text
+
+
+@then(
+    parsers.parse(
+        "the response contains ISBN {isbn}, title {title}, author {author}, "
+        "genre {genre}, description {description} and available stock {stock:d}"
+    )
+)
+def response_contains_book(scenario_state, isbn, title, author, genre, description, stock):
+    response = scenario_state["response"]
+    body = response.json()
+    assert body["isbn"] == isbn
+    assert body["title"] == title
+    assert body["author"] == author
+    assert body["genre"] == genre
+    assert body["description"] == _description(description)
+    assert body["stock"] == stock
+
+
+@then(parsers.parse("the request returns status code {status:d}"))
+def request_status(scenario_state, status):
+    response = scenario_state["response"]
+    assert response.status_code == status, response.text
+
+
+@then("no book data is returned")
+def no_book_data(scenario_state):
+    body = scenario_state["response"].json()
+    assert "isbn" not in body
+    assert "title" not in body
 
 
 @then(parsers.parse("the book is created with status code {status:d}"))

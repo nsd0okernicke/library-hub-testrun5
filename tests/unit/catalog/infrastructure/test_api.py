@@ -71,3 +71,57 @@ class TestCreateBookApi:
         assert first.status_code == 201
         assert second.status_code == 409
         assert "already registered" in second.json()["detail"]
+
+
+class TestRetrieveBookApi:
+    def setup_method(self) -> None:
+        self.repository = InMemoryBookRepository()
+        self.app = create_app(self.repository)
+        self.client = TestClient(self.app)
+        self.book = Book(
+            isbn="978-0-20-163361-0",
+            title="Dune",
+            author="Frank Herbert",
+            genre="Sci-Fi",
+            description="Arrakis saga",
+            stock=3,
+        )
+        self.repository.save(self.book)
+
+    def test_retrieve_by_isbn_returns_200_with_full_metadata(self) -> None:
+        response = self.client.get("/books/978-0-20-163361-0")
+        assert response.status_code == 200
+        assert response.json() == {
+            "isbn": "978-0-20-163361-0",
+            "title": "Dune",
+            "author": "Frank Herbert",
+            "genre": "Sci-Fi",
+            "description": "Arrakis saga",
+            "stock": 3,
+        }
+
+    def test_retrieve_book_without_description(self) -> None:
+        self.repository.save(
+            Book(
+                isbn="978-0-13-468599-1",
+                title="Refactoring",
+                author="Martin Fowler",
+                genre="Software",
+                description=None,
+                stock=0,
+            )
+        )
+        response = self.client.get("/books/978-0-13-468599-1")
+        assert response.status_code == 200
+        assert response.json()["description"] is None
+        assert response.json()["stock"] == 0
+
+    def test_retrieve_unknown_isbn_returns_404(self) -> None:
+        response = self.client.get("/books/978-1-40-289462-6")
+        assert response.status_code == 404
+
+    def test_retrieve_unknown_isbn_returns_no_book_data(self) -> None:
+        response = self.client.get("/books/978-1-40-289462-6")
+        body = response.json()
+        assert "isbn" not in body
+        assert "title" not in body

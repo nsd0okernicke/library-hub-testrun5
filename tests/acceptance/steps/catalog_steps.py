@@ -254,12 +254,6 @@ def book_is_registered(client, isbn, title, author, genre, description, stock):
     assert book.stock == stock
 
 
-@then(parsers.parse("the creation is rejected with status code {status:d}"))
-def rejected_status(scenario_state, status):
-    response = scenario_state["response"]
-    assert response.status_code == status, response.text
-
-
 @then(parsers.parse("no second book with ISBN {isbn} is registered"))
 def no_second_book(client, isbn):
     repository = client.repository  # type: ignore[attr-defined]

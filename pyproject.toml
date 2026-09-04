@@ -1,0 +1,74 @@
+[project]
+name = "library-hub"
+version = "0.1.0"
+description = "LibraryHub — Library loan system (catalog, loans, users services)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-bdd>=7.0",
+    "testcontainers[postgres,rabbitmq]>=3.7",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.1",
+    "hypothesis>=6.0",
+    "cosmic-ray>=8.3",
+    "mypy>=1.5",
+    "ruff>=0.1",
+    "black>=24.0",
+    "radon>=6.0",
+    "pip-audit>=2.7",
+    "interrogate>=1.5",
+    "import-linter>=1.16",
+    "bandit[sarif]>=1.7",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py", "*_steps.py"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.interrogate]
+exclude = ["tests", ".venv"]
+fail-under = 90
+
+[tool.importlinter]
+root_packages = ["catalog"]
+
+[[tool.importlinter.contracts]]
+name = "Catalog dependency direction"
+type = "forbidden"
+source_modules = ["catalog.domain"]
+forbidden_modules = ["catalog.application", "catalog.infrastructure"]
+
+[[tool.importlinter.contracts]]
+name = "Application must not import infrastructure"
+type = "forbidden"
+source_modules = ["catalog.application"]
+forbidden_modules = ["catalog.infrastructure"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["catalog*", "loans*", "users*"]

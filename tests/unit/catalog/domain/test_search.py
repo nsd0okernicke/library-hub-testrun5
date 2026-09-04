@@ -57,6 +57,14 @@ class TestBookSearchResult:
         assert result.items == []
         assert result.total_count == 0
 
+    def test_result_is_immutable(self) -> None:
+        result = BookSearchResult(items=[], total_count=0)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            result.total_count = 1  # type: ignore[misc]
+
+    def test_default_total_count_is_zero(self) -> None:
+        assert BookSearchResult().total_count == 0
+
     def test_negative_total_count_is_rejected(self) -> None:
         with pytest.raises(ValueError):
             BookSearchResult(items=[], total_count=-1)

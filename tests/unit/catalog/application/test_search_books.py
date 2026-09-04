@@ -1,5 +1,7 @@
 """Unit tests for the SearchBooks use case (fake repository, no I/O)."""
 
+import typing
+
 import pytest
 
 from catalog.application.search_books import SearchBooks
@@ -68,6 +70,17 @@ class TestSearchBooks:
         expected = _result()
         search_books = SearchBooks(FakeBookRepository(expected))
         assert search_books() == expected
+
+    def test_signature_annotations_resolve_to_the_documented_types(self) -> None:
+        # Annotations are part of the use-case contract; force evaluation so a
+        # corrupted annotation (PEP 604 union in particular) cannot pass silently.
+        hints = typing.get_type_hints(SearchBooks.__call__)
+        assert hints["title"] == (str | None)
+        assert hints["author"] == (str | None)
+        assert hints["genre"] == (str | None)
+        assert hints["page"] is int
+        assert hints["page_size"] is int
+        assert hints["return"] is BookSearchResult
 
     @pytest.mark.parametrize(
         "kwargs", [{"page": 0}, {"page": -3}, {"page_size": 0}, {"page_size": -1}]

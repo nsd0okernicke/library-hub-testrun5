@@ -29,6 +29,11 @@ class TestBookSearchCriteria:
         assert criteria.page == 1
         assert criteria.page_size == 20
 
+    def test_criteria_is_immutable(self) -> None:
+        criteria = BookSearchCriteria()
+        with pytest.raises(AttributeError):
+            criteria.page = 2  # type: ignore[misc]
+
     def test_criteria_are_immutable(self) -> None:
         criteria = BookSearchCriteria(title="dune")
         with pytest.raises(dataclasses.FrozenInstanceError):

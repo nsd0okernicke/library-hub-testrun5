@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
+from catalog.application.check_availability import CheckBookAvailability
 from catalog.application.create_book import CreateBook
 from catalog.application.retrieve_book import RetrieveBook
 from catalog.application.search_books import SearchBooks
@@ -43,6 +44,7 @@ def create_app(repository: BookRepository) -> FastAPI:
     app = FastAPI(title="Catalog Service")
     create_book = CreateBook(repository)
     retrieve_book = RetrieveBook(repository)
+    check_book_availability = CheckBookAvailability(repository)
     search_books = SearchBooks(repository)
 
     @app.get("/books")
@@ -67,6 +69,21 @@ def create_app(repository: BookRepository) -> FastAPI:
         return {
             "total": result.total_count,
             "books": [_book_payload(book) for book in result.items],
+        }
+
+    @app.get("/books/{isbn}/availability")
+    def availability_endpoint(isbn: str) -> dict[str, object]:
+        """Return the lightweight availability (ISBN + available count) for an ISBN.
+
+        404 when the ISBN is unregistered.
+        """
+        try:
+            availability = check_book_availability(isbn)
+        except BookNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {
+            "isbn": availability.isbn,
+            "available_count": availability.available_count,
         }
 
     @app.get("/books/{isbn}")

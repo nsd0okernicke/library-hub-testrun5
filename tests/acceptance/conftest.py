@@ -2,7 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from pytest_bdd import given, parsers, then
+from pytest_bdd import given, parsers, then, when
 from sqlalchemy import create_engine
 from testcontainers.community.postgres import PostgresContainer
 
@@ -42,6 +42,53 @@ def rejected_status(scenario_state, status):
     """Shared step: several feature files word the rejection check identically."""
     response = scenario_state["response"]
     assert response.status_code == status, response.text
+
+
+@given(parsers.parse("a user {name} with email {email} exists"))
+def user_exists(loan_client, scenario_state, name, email):
+    """Shared step: register a user account before borrowing scenarios."""
+    response = loan_client.post("/users", json={"name": name, "email": email})
+    assert response.status_code == 201, response.text
+    scenario_state.setdefault("users", {})[name] = response.json()
+
+
+@given(parsers.parse("a book with ISBN {isbn} is registered in the catalog"))
+def book_registered_in_catalog(client, isbn):
+    """Shared step: register a book in the catalog service."""
+    response = client.post(
+        "/books",
+        json={
+            "isbn": isbn,
+            "title": f"Book {isbn}",
+            "author": "Some Author",
+            "genre": "Fiction",
+            "stock": 1,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
+@given(parsers.parse("the loan due date term is {term:d} days"))
+def loan_due_date_term(loan_client, term):
+    """Shared step: override the global due date term in days."""
+    loan_client.settings.due_date_term_days = int(term)  # type: ignore[attr-defined]
+
+
+@when(parsers.parse("user {name} requests to borrow book {isbn}"))
+def request_borrow(loan_client, scenario_state, name, isbn):
+    """Shared step: post a borrow request for the named user and book."""
+    user = scenario_state["users"][name]  # type: ignore[index]
+    scenario_state["response"] = loan_client.post(
+        "/loans", json={"user_email": user["email"], "isbn": isbn}
+    )
+
+
+@when(parsers.parse("the reservation for the loan is decided as {decision}"))
+def decide_reservation(loan_client, scenario_state, decision):
+    """Shared step: apply the reservation outcome to the borrow response's loan."""
+    loan_id = scenario_state["response"].json()["loan_id"]
+    response = loan_client.post(f"/loans/{loan_id}/reservation", json={"decision": decision})
+    assert response.status_code == 200, response.text
 
 
 @pytest.fixture(scope="session")

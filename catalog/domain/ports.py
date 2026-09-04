@@ -11,7 +11,7 @@ class BookRepository(abc.ABC):
 
     @abc.abstractmethod
     def save(self, book: Book) -> None:
-        """Persist a new book."""
+        """Persist the book (insert, or update the existing row for the ISBN)."""
 
     @abc.abstractmethod
     def get_by_isbn(self, isbn: str) -> Book | None:

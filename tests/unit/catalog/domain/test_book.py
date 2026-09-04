@@ -79,3 +79,54 @@ class TestBook:
     def test_book_already_exists_carries_isbn(self) -> None:
         error = BookAlreadyExists("978-3-16-148410-0")
         assert "978-3-16-148410-0" in str(error)
+
+
+class TestBookAddCopies:
+    @pytest.fixture
+    def dune(self) -> Book:
+        return Book(
+            isbn="978-0-20-163361-0",
+            title="Dune",
+            author="Frank Herbert",
+            genre="Sci-Fi",
+            description="Arrakis saga",
+            stock=3,
+        )
+
+    def test_add_copies_returns_new_book_with_increased_stock(self, dune: Book) -> None:
+        updated = dune.add_copies(2)
+        assert updated.stock == 5
+
+    def test_add_copies_keeps_all_metadata(self, dune: Book) -> None:
+        updated = dune.add_copies(7)
+        assert (updated.isbn, updated.title, updated.author, updated.genre) == (
+            dune.isbn,
+            dune.title,
+            dune.author,
+            dune.genre,
+        )
+        assert updated.description == dune.description
+
+    def test_add_copies_does_not_mutate_the_original(self, dune: Book) -> None:
+        dune.add_copies(4)
+        assert dune.stock == 3
+
+    def test_add_copies_from_zero_stock(self) -> None:
+        book = Book(
+            isbn="978-3-16-148410-0",
+            title="The Hobbit",
+            author="J.R.R. Tolkien",
+            genre="Fantasy",
+            description=None,
+            stock=0,
+        )
+        assert book.add_copies(5).stock == 5
+
+    @pytest.mark.parametrize("amount", [0, -1, -100])
+    def test_add_copies_rejects_non_positive_amount(self, dune: Book, amount: int) -> None:
+        with pytest.raises(ValueError):
+            dune.add_copies(amount)
+
+    def test_add_copies_rejection_message_contains_amount(self, dune: Book) -> None:
+        with pytest.raises(ValueError, match="-2"):
+            dune.add_copies(-2)

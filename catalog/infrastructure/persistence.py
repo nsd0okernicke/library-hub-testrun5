@@ -45,7 +45,7 @@ class SqlAlchemyBookRepository(BookRepository):
         self._engine = engine
 
     def save(self, book: Book) -> None:
-        """Persist a new book."""
+        """Persist the book, inserting a new row or updating the row for the ISBN."""
         row = BookModel(
             isbn=book.isbn,
             title=book.title,
@@ -55,7 +55,7 @@ class SqlAlchemyBookRepository(BookRepository):
             stock=book.stock,
         )
         with Session(self._engine) as session, session.begin():
-            session.add(row)
+            session.merge(row)
 
     def get_by_isbn(self, isbn: str) -> Book | None:
         """Return the registered book for an ISBN, or None."""

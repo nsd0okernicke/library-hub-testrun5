@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from catalog.application.check_availability import CheckBookAvailability
 from catalog.application.create_book import CreateBook
 from catalog.application.retrieve_book import RetrieveBook
+from catalog.application.return_stock import ManualStockReturn
 from catalog.application.search_books import SearchBooks
 from catalog.domain.book import Book
 from catalog.domain.exceptions import BookAlreadyExists, BookNotFound
@@ -25,6 +26,12 @@ class CreateBookRequest(BaseModel):
     genre: str
     description: str | None = None
     stock: int
+
+
+class StockReturnRequest(BaseModel):
+    """Request body for a manual stock return (number of copies added)."""
+
+    copies: int
 
 
 def _book_payload(book: Book) -> dict[str, object]:
@@ -46,6 +53,7 @@ def create_app(repository: BookRepository) -> FastAPI:
     retrieve_book = RetrieveBook(repository)
     check_book_availability = CheckBookAvailability(repository)
     search_books = SearchBooks(repository)
+    stock_return = ManualStockReturn(repository)
 
     @app.get("/books")
     def search_books_endpoint(
@@ -109,6 +117,17 @@ def create_app(repository: BookRepository) -> FastAPI:
             )
         except BookAlreadyExists as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return _book_payload(book)
+
+    @app.post("/books/{isbn}/stock-returns")
+    def stock_return_endpoint(isbn: str, request: StockReturnRequest) -> dict[str, object]:
+        """Add copies to a book's stock (200); 404 unknown ISBN, 422 non-positive amount."""
+        try:
+            book = stock_return(isbn, request.copies)
+        except BookNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _book_payload(book)
 
     @app.get("/health")

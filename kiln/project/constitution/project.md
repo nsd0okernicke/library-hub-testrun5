@@ -160,7 +160,9 @@ mutation site counts, never runs the full suite (see `constitution/roles/coder.m
   [cosmic-ray]
   module-path = "catalog"
   timeout = 60.0
-  excluded-modules = ["catalog/infrastructure/*"]
+  excluded-modules = ["catalog/infrastructure/**/*.py"]
+  # IMPORTANT: test-command must use python -m pytest, never a .venv path.
+  # Absolute or relative venv paths break on the CI runner and in other worktrees.
   test-command = "python -m pytest tests/unit -x -q"
 
   [cosmic-ray.distributor]
@@ -173,6 +175,6 @@ mutation site counts, never runs the full suite (see `constitution/roles/coder.m
   .venv\Scripts\cr-rate --fail-over 20 mutation-catalog.sqlite   # survival ≤ 20% == score ≥ 80%
   ```
 
-- Coverage ≥ 90%: `python -m pytest --cov=catalog --cov=loans --cov-report=term-missing`
-- Type checking: `python -m mypy catalog/ loans/ --strict`
+- Coverage ≥ 90%: `python -m pytest --cov=catalog --cov=loans --cov-report=term-missing --cov-fail-under=90`
+- Type checking: `python -m mypy catalog/ loans/ --strict`  (also set `files = ["catalog", "loans"]` in `[tool.mypy]` so bare `mypy` works)
 - Lint: `python -m ruff check . && python -m ruff format --check .`

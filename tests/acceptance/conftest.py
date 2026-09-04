@@ -131,20 +131,27 @@ def broker() -> InMemoryBroker:
 
 
 @pytest.fixture(scope="session")
-def postgres_container():
-    """Shared PostgreSQL container for the acceptance session."""
+def catalog_postgres():
+    """PostgreSQL container for the catalog bounded context."""
+    with PostgresContainer("postgres:16-alpine") as container:
+        yield container
+
+
+@pytest.fixture(scope="session")
+def loans_postgres():
+    """PostgreSQL container for the loans bounded context."""
     with PostgresContainer("postgres:16-alpine") as container:
         yield container
 
 
 @pytest.fixture()
-def client(postgres_container, broker):
+def client(catalog_postgres, broker):
     """TestClient wired to a fresh catalog database (tables reset per scenario)."""
-    port = postgres_container.get_exposed_port(5432)
+    port = catalog_postgres.get_exposed_port(5432)
     url = (
-        f"postgresql+psycopg://{postgres_container.username}:"
-        f"{postgres_container.password}"
-        f"@{postgres_container.get_container_host_ip()}:{port}/{postgres_container.dbname}"
+        f"postgresql+psycopg://{catalog_postgres.username}:"
+        f"{catalog_postgres.password}"
+        f"@{catalog_postgres.get_container_host_ip()}:{port}/{catalog_postgres.dbname}"
     )
     engine = create_engine(url)
     Base.metadata.drop_all(engine)
@@ -159,13 +166,13 @@ def client(postgres_container, broker):
 
 
 @pytest.fixture()
-def loan_client(postgres_container, broker):
+def loan_client(loans_postgres, broker):
     """TestClient wired to the loans service (tables reset per scenario)."""
-    port = postgres_container.get_exposed_port(5432)
+    port = loans_postgres.get_exposed_port(5432)
     url = (
-        f"postgresql+psycopg://{postgres_container.username}:"
-        f"{postgres_container.password}"
-        f"@{postgres_container.get_container_host_ip()}:{port}/{postgres_container.dbname}"
+        f"postgresql+psycopg://{loans_postgres.username}:"
+        f"{loans_postgres.password}"
+        f"@{loans_postgres.get_container_host_ip()}:{port}/{loans_postgres.dbname}"
     )
     engine = create_engine(url)
     LoansBase.metadata.drop_all(engine)

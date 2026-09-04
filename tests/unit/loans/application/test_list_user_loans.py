@@ -1,5 +1,7 @@
 """Unit tests for the ListUserLoans use case (mocked ports, no I/O)."""
 
+from datetime import datetime
+
 import pytest
 
 from loans.application.list_user_loans import ListUserLoans
@@ -41,6 +43,9 @@ class FakeLoanRepository:
         )
         ordered = sorted(ordered, key=lambda loan: loan.created_at, reverse=True)
         return ordered[query.offset : query.offset + query.page_size]
+
+    def list_overdue(self, now: datetime) -> list[Loan]:
+        return [loan for loan in self._loans.values() if loan.is_overdue(now)]
 
 
 @pytest.fixture

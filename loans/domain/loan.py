@@ -69,6 +69,18 @@ class Loan:
         if self.status is not LoanStatus.PENDING:
             raise LoanNotPending(self.loan_id)
 
+    def is_overdue(self, now: datetime) -> bool:
+        """Return whether this loan is overdue at ``now``.
+
+        A loan is overdue exactly when its status is ACTIVE and its due date
+        lies in the past (due_date < now). PENDING, REJECTED and RETURNED
+        loans are never overdue, and an ACTIVE loan whose due date has not
+        yet passed is not overdue.
+        """
+        return (
+            self.status is LoanStatus.ACTIVE and self.due_date is not None and self.due_date < now
+        )
+
     def activate(self, due_date_term_days: int) -> "Loan":
         """Return a copy of this pending loan as ACTIVE with the global due date term.
 

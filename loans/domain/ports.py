@@ -1,6 +1,7 @@
 """Port interfaces for the loans context."""
 
 import abc
+from datetime import datetime
 
 from loans.domain.loan import Loan
 from loans.domain.user import User
@@ -41,6 +42,10 @@ class LoanRepository(abc.ABC):
     @abc.abstractmethod
     def list_for_user(self, query: UserLoanQuery) -> list[Loan]:
         """Return one user's loans, newest first (ties broken by loan_id asc)."""
+
+    @abc.abstractmethod
+    def list_overdue(self, now: datetime) -> list[Loan]:
+        """Return all overdue loans as of ``now`` (ACTIVE with due_date < now)."""
 
     @abc.abstractmethod
     def count(self) -> int:

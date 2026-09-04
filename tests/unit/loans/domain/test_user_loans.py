@@ -1,5 +1,7 @@
 """Unit tests for the user loan listing value objects (pure Python, no I/O)."""
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from loans.domain.user_loans import (
@@ -58,6 +60,11 @@ class TestUserLoanQuery:
         with pytest.raises(ValueError):
             UserLoanQuery(user_id="u", page=1, page_size=-5)
 
+    def test_query_is_frozen(self) -> None:
+        query = UserLoanQuery(user_id="u")
+        with pytest.raises(FrozenInstanceError):
+            query.page = 2
+
 
 class TestUserLoanPage:
     def test_empty_page_by_default(self) -> None:
@@ -66,3 +73,12 @@ class TestUserLoanPage:
     def test_holds_the_requested_page(self) -> None:
         assert UserLoanPage(page=2, page_size=10).page == 2
         assert UserLoanPage(page=2, page_size=10).page_size == 10
+
+    def test_defaults_are_page_one_and_size_20(self) -> None:
+        page = UserLoanPage()
+        assert page.page == 1
+        assert page.page_size == DEFAULT_PAGE_SIZE == 20
+
+    def test_page_is_frozen(self) -> None:
+        with pytest.raises(FrozenInstanceError):
+            UserLoanPage().page = 2

@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 from catalog.domain.book import Book
+from catalog.domain.search import BookSearchCriteria, BookSearchResult
 from catalog.infrastructure.api.main import create_app
 
 
@@ -20,6 +21,28 @@ class InMemoryBookRepository:
 
     def count_by_isbn(self, isbn: str) -> int:
         return 1 if isbn in self.books else 0
+
+    def search(self, criteria: BookSearchCriteria) -> BookSearchResult:
+        """Filter by case-insensitive substring (AND), order by title, paginate."""
+        matches = [b for b in self.books.values() if self._matches(b, criteria)]
+        matches.sort(key=lambda b: b.title)
+        start = (criteria.page - 1) * criteria.page_size
+        return BookSearchResult(
+            items=matches[start : start + criteria.page_size], total_count=len(matches)
+        )
+
+    @staticmethod
+    def _matches(book: Book, criteria: BookSearchCriteria) -> bool:
+        """Return True when every given filter is a case-insensitive substring of the field."""
+        filters = (
+            (criteria.title, "title"),
+            (criteria.author, "author"),
+            (criteria.genre, "genre"),
+        )
+        for value, field_name in filters:
+            if value is not None and value.lower() not in getattr(book, field_name).lower():
+                return False
+        return True
 
 
 class TestCreateBookApi:
@@ -125,3 +148,79 @@ class TestRetrieveBookApi:
         body = response.json()
         assert "isbn" not in body
         assert "title" not in body
+
+
+class TestSearchBooksApi:
+    def setup_method(self) -> None:
+        self.repository = InMemoryBookRepository()
+        self.app = create_app(self.repository)
+        self.client = TestClient(self.app)
+        for isbn, title, author, genre in (
+            ("978-0-20-163361-0", "Dune", "Frank Herbert", "Sci-Fi"),
+            ("978-0-13-468599-1", "Refactoring", "Martin Fowler", "Software"),
+            ("978-3-16-148410-0", "The Hobbit", "J.R.R. Tolkien", "Fantasy"),
+        ):
+            self.repository.save(
+                Book(isbn=isbn, title=title, author=author, genre=genre, description=None, stock=1)
+            )
+
+    def test_search_without_filters_returns_all_books_sorted_by_title(self) -> None:
+        response = self.client.get("/books")
+        assert response.status_code == 200
+        body = response.json()
+        assert [book["title"] for book in body["books"]] == ["Dune", "Refactoring", "The Hobbit"]
+        assert body["total"] == 3
+
+    def test_search_payload_includes_isbn_title_author_genre_and_stock(self) -> None:
+        response = self.client.get("/books", params={"title": "dune"})
+        body = response.json()
+        assert body["total"] == 1
+        book = body["books"][0]
+        assert book["isbn"] == "978-0-20-163361-0"
+        assert book["title"] == "Dune"
+        assert book["author"] == "Frank Herbert"
+        assert book["genre"] == "Sci-Fi"
+        assert isinstance(book["stock"], int)
+
+    def test_single_filter_is_case_insensitive_substring(self) -> None:
+        for field, value in (
+            ("title", "the"),
+            ("author", "FOWLER"),
+            ("genre", "fantasy"),
+        ):
+            body = self.client.get("/books", params={field: value}).json()
+            assert body["total"] == 1
+            assert body["books"][0]["title"] in ("The Hobbit", "Refactoring", "The Hobbit")
+
+    def test_multiple_filters_combine_with_and(self) -> None:
+        body = self.client.get(
+            "/books", params={"title": "the", "author": "Tolkien", "genre": "fantasy"}
+        ).json()
+        assert body["total"] == 1
+        empty = self.client.get("/books", params={"title": "the", "author": "fowler"}).json()
+        assert empty["books"] == []
+        assert empty["total"] == 0
+
+    def test_search_without_match_is_empty_with_zero_total(self) -> None:
+        response = self.client.get("/books", params={"title": "nonexistent"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["books"] == []
+        assert body["total"] == 0
+
+    def test_pagination_slices_the_sorted_results(self) -> None:
+        first = self.client.get("/books", params={"page": 1, "page_size": 2}).json()
+        assert [book["title"] for book in first["books"]] == ["Dune", "Refactoring"]
+        assert first["total"] == 3
+        second = self.client.get("/books", params={"page": 2, "page_size": 2}).json()
+        assert [book["title"] for book in second["books"]] == ["The Hobbit"]
+        assert second["total"] == 3
+
+    def test_page_beyond_the_last_page_is_empty_with_kept_total(self) -> None:
+        body = self.client.get("/books", params={"page": 4, "page_size": 1}).json()
+        assert body["books"] == []
+        assert body["total"] == 3
+
+    def test_invalid_pagination_returns_422(self) -> None:
+        assert self.client.get("/books", params={"page": 0}).status_code == 422
+        assert self.client.get("/books", params={"page_size": 0}).status_code == 422

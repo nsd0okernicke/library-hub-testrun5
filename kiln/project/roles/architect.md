@@ -51,7 +51,22 @@ mkdir -p ../reports
 bandit --format sarif --output ../reports/lint.sarif <changed-files>
 ```
 
-### Step 5: Run acceptance tests
+### Step 5: Static analysis (lint, types, docs)
+
+Run the CI static-analysis commands on changed files and fix any issues. These gates are not
+owned by any single role — every handoff must leave them passing.
+
+```bash
+ruff check <changed-files-or-dirs>
+mypy <changed-modules>
+interrogate <changed-modules>
+```
+
+Fix findings before moving on. CI runs these exact commands on every push, so skipping them
+means the next push will fail.
+
+
+### Step 6: Run acceptance tests
 
 Run the acceptance suite against the committed code. All scenarios must pass before handoff.
 

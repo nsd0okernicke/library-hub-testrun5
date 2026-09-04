@@ -77,6 +77,63 @@ class TestSqlAlchemyLoanRepository:
         assert stored.status is LoanStatus.REJECTED
 
 
+class TestListOverdue:
+    NOW = datetime(2026, 5, 1, 12, 0, 0)
+
+    @staticmethod
+    def _save_active(loan_id: str, due_date: datetime) -> None:
+        repository = _repository()
+        repository.save(
+            Loan(
+                loan_id=loan_id,
+                user_id="usr-1",
+                isbn="978-0-20-163361-0",
+                status=LoanStatus.ACTIVE,
+                created_at=due_date - timedelta(days=28),
+                due_date=due_date,
+            )
+        )
+        return repository
+
+    def test_returns_only_active_loans_past_their_due_date(self) -> None:
+        repository = _repository()
+        due_past = self.NOW - timedelta(days=3)
+        repository.save(
+            Loan(
+                "overdue",
+                "usr-1",
+                "isbn-1",
+                LoanStatus.ACTIVE,
+                due_past - timedelta(days=28),
+                due_past,
+            )
+        )
+        due_later = self.NOW + timedelta(days=1)
+        repository.save(
+            Loan(
+                "future",
+                "usr-2",
+                "isbn-2",
+                LoanStatus.ACTIVE,
+                due_later - timedelta(days=28),
+                due_later,
+            )
+        )
+        repository.save(_pending_loan("pending"))
+        repository.save(_pending_loan("rejected").reject())
+        repository.save(_active_loan("returned").mark_returned())
+        overdue = repository.list_overdue(self.NOW)
+        assert [loan.loan_id for loan in overdue] == ["overdue"]
+
+    def test_due_exactly_at_now_is_not_overdue(self) -> None:
+        repository = self._save_active("due-now", self.NOW)
+        assert repository.list_overdue(self.NOW) == []
+
+    def test_no_loans_gives_an_empty_list(self) -> None:
+        repository = _repository()
+        assert repository.list_overdue(self.NOW) == []
+
+
 class TestListForUser:
     @staticmethod
     def _save(user_id: str, loan_id: str, created_at: datetime) -> None:

@@ -171,6 +171,38 @@ class TestLoanReturnGuards:
             returned.activate(due_date_term_days=28)
 
 
+class TestLoanOverdue:
+    def _active(self, due: datetime) -> Loan:
+        return _pending_loan(
+            status=LoanStatus.ACTIVE, created_at=due - timedelta(days=28), due_date=due
+        )
+
+    def test_active_loan_past_due_date_is_overdue(self) -> None:
+        due = datetime(2026, 4, 1, 12, 0, 0)
+        assert self._active(due).is_overdue(now=due + timedelta(seconds=1)) is True
+
+    def test_active_loan_due_today_is_overdue(self) -> None:
+        due = datetime(2026, 4, 1, 12, 0, 0)
+        assert self._active(due).is_overdue(now=due) is False
+        # "in the past" is strictly due_date < now: due exactly at now is not overdue.
+        assert self._active(due).is_overdue(now=due + timedelta(microseconds=1)) is True
+
+    def test_active_loan_before_due_date_is_not_overdue(self) -> None:
+        due = datetime(2026, 4, 1, 12, 0, 0)
+        assert self._active(due).is_overdue(now=due - timedelta(seconds=1)) is False
+
+    def test_pending_loan_is_never_overdue(self) -> None:
+        assert _pending_loan().is_overdue(now=datetime(2026, 12, 31)) is False
+
+    def test_rejected_loan_is_never_overdue(self) -> None:
+        rejected = _pending_loan().reject()
+        assert rejected.is_overdue(now=datetime(2026, 12, 31)) is False
+
+    def test_returned_loan_is_never_overdue(self) -> None:
+        returned = _pending_loan().activate(due_date_term_days=28).mark_returned()
+        assert returned.is_overdue(now=datetime(2026, 12, 31)) is False
+
+
 class TestReservationDecision:
     def test_decision_members(self) -> None:
         assert ReservationDecision.ACTIVE.value == "ACTIVE"

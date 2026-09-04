@@ -1,8 +1,13 @@
-"""Acceptance step definitions for features/cat-3-create-book.feature."""
+"""Acceptance step definitions for features/cat-3-create-book.feature.
+
+pytest-bdd 8.x matches plain string step names *exactly*; parameterized steps
+must be registered with an explicit parser. ``parsers.parse`` uses the `parse`
+library: ``{name}`` matches any (non-greedy) text and ``{name:d}`` an integer.
+"""
 
 from pathlib import Path
 
-from pytest_bdd import given, scenarios, then, when
+from pytest_bdd import given, parsers, scenarios, then, when
 
 FEATURES_DIR = Path(__file__).resolve().parents[3] / "features"
 
@@ -15,14 +20,14 @@ def _description(value: str) -> str | None:
 
 
 @given("the catalog service is running")
-def catalog_service_running(context):
+def catalog_service_running(client):
     """Background: the TestClient is wired to the catalog service by the fixture."""
-    assert context.client is not None
+    assert client is not None
 
 
-@given("a book with ISBN {isbn} is already registered")
-def book_already_registered(context, isbn):
-    response = context.client.post(
+@given(parsers.parse("a book with ISBN {isbn} is already registered"))
+def book_already_registered(client, isbn):
+    response = client.post(
         "/books",
         json={
             "isbn": isbn,
@@ -36,11 +41,13 @@ def book_already_registered(context, isbn):
 
 
 @when(
-    "a book is created with ISBN {isbn}, title {title}, author {author}, "
-    "genre {genre}, description {description} and initial stock {stock:int}"
+    parsers.parse(
+        "a book is created with ISBN {isbn}, title {title}, author {author}, "
+        "genre {genre}, description {description} and initial stock {stock:d}"
+    )
 )
-def create_book(context, isbn, title, author, genre, description, stock):
-    context.response = context.client.post(
+def create_book(client, scenario_state, isbn, title, author, genre, description, stock):
+    scenario_state["response"] = client.post(
         "/books",
         json={
             "isbn": isbn,
@@ -53,17 +60,20 @@ def create_book(context, isbn, title, author, genre, description, stock):
     )
 
 
-@then("the book is created with status code {status:int}")
-def created_status(context, status):
-    assert context.response.status_code == status, context.response.text
+@then(parsers.parse("the book is created with status code {status:d}"))
+def created_status(scenario_state, status):
+    response = scenario_state["response"]
+    assert response.status_code == status, response.text
 
 
 @then(
-    "the book is registered with ISBN {isbn}, title {title}, author {author}, "
-    "genre {genre}, description {description} and stock {stock:int}"
+    parsers.parse(
+        "the book is registered with ISBN {isbn}, title {title}, author {author}, "
+        "genre {genre}, description {description} and stock {stock:d}"
+    )
 )
-def book_is_registered(context, isbn, title, author, genre, description, stock):
-    repository = context.client.repository  # type: ignore[attr-defined]
+def book_is_registered(client, isbn, title, author, genre, description, stock):
+    repository = client.repository  # type: ignore[attr-defined]
     book = repository.get_by_isbn(isbn)
     assert book is not None
     assert book.title == title
@@ -73,12 +83,13 @@ def book_is_registered(context, isbn, title, author, genre, description, stock):
     assert book.stock == stock
 
 
-@then("the creation is rejected with status code {status:int}")
-def rejected_status(context, status):
-    assert context.response.status_code == status, context.response.text
+@then(parsers.parse("the creation is rejected with status code {status:d}"))
+def rejected_status(scenario_state, status):
+    response = scenario_state["response"]
+    assert response.status_code == status, response.text
 
 
-@then("no second book with ISBN {isbn} is registered")
-def no_second_book(context, isbn):
-    repository = context.client.repository  # type: ignore[attr-defined]
+@then(parsers.parse("no second book with ISBN {isbn} is registered"))
+def no_second_book(client, isbn):
+    repository = client.repository  # type: ignore[attr-defined]
     assert repository.count_by_isbn(isbn) == 1

@@ -1,6 +1,7 @@
 """Unit tests for the catalog domain Book entity."""
 
 import dataclasses
+import typing
 
 import pytest
 
@@ -69,6 +70,11 @@ class TestBook:
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
             book.stock = 6  # type: ignore[misc]
+
+    def test_annotations_are_valid(self) -> None:
+        """Field annotations must evaluate (guards the `str | None` union)."""
+        hints = typing.get_type_hints(Book)
+        assert "description" in hints
 
     def test_book_already_exists_carries_isbn(self) -> None:
         error = BookAlreadyExists("978-3-16-148410-0")

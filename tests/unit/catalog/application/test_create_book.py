@@ -1,5 +1,7 @@
 """Unit tests for the CreateBook use case (mocked repository port)."""
 
+import typing
+
 import pytest
 
 from catalog.application.create_book import CreateBook
@@ -94,6 +96,11 @@ class TestCreateBook:
                 stock=5,
             )
         assert len(repository.saved) == 1
+
+    def test_call_signature_annotations_are_valid(self) -> None:
+        """Public use-case signature must evaluate (guards the `str | None` union)."""
+        hints = typing.get_type_hints(CreateBook.__call__)
+        assert hints["return"] is Book
 
     def test_invalid_isbn_is_rejected(self, use_case: CreateBook) -> None:
         with pytest.raises(ValueError):

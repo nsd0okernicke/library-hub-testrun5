@@ -9,6 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from loans.domain.loan import Loan, LoanStatus
 from loans.domain.ports import LoanRepository, UserRepository
 from loans.domain.user import User
+from loans.domain.user_loans import UserLoanQuery
 
 
 class Base(DeclarativeBase):
@@ -118,6 +119,22 @@ class SqlAlchemyLoanRepository(LoanRepository):
                 select(LoanModel).where(LoanModel.loan_id == loan_id)
             ).scalar_one_or_none()
             return row.to_domain() if row is not None else None
+
+    def list_for_user(self, query: UserLoanQuery) -> list[Loan]:
+        """Return one user's loans newest first (ties broken by loan_id asc)."""
+        with Session(self._engine) as session:
+            rows = (
+                session.execute(
+                    select(LoanModel)
+                    .where(LoanModel.user_id == query.user_id)
+                    .order_by(LoanModel.created_at.desc(), LoanModel.loan_id.asc())
+                    .limit(query.page_size)
+                    .offset(query.offset)
+                )
+                .scalars()
+                .all()
+            )
+            return [row.to_domain() for row in rows]
 
     def count(self) -> int:
         """Return the total number of stored loans."""

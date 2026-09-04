@@ -18,6 +18,13 @@ class InMemoryLoanRepository:
     def get_by_id(self, loan_id: str) -> object | None:
         return self.loans.get(loan_id)
 
+    def list_overdue(self, now: object) -> list[object]:
+        return [
+            loan
+            for loan in self.loans.values()
+            if getattr(loan, "is_overdue", lambda reference: False)(now)
+        ]
+
     def count(self) -> int:
         return len(self.loans)
 

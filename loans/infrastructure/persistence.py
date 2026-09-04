@@ -136,6 +136,21 @@ class SqlAlchemyLoanRepository(LoanRepository):
             )
             return [row.to_domain() for row in rows]
 
+    def list_overdue(self, now: datetime) -> list[Loan]:
+        """Return all ACTIVE loans whose due date lies before ``now``."""
+        with Session(self._engine) as session:
+            rows = (
+                session.execute(
+                    select(LoanModel).where(
+                        LoanModel.status == LoanStatus.ACTIVE.value,
+                        LoanModel.due_date < now,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return [row.to_domain() for row in rows]
+
     def count(self) -> int:
         """Return the total number of stored loans."""
         with Session(self._engine) as session:

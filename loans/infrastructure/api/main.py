@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from loans.application.borrow_book import BorrowBook
 from loans.application.create_user import CreateUser
 from loans.application.decide_reservation import DecideReservation
+from loans.application.list_overdue_loans import ListOverdueLoans
 from loans.application.list_user_loans import ListUserLoans
 from loans.application.return_book import ReturnBook
 from loans.domain.exceptions import (
@@ -79,6 +80,16 @@ def _loan_entry(loan: Loan) -> dict[str, object]:
     }
 
 
+def _overdue_entry(loan: Loan) -> dict[str, object]:
+    """Serialize a loan into an overdue listing entry (due date as ISO 8601)."""
+    return {
+        "loan_id": loan.loan_id,
+        "user_id": loan.user_id,
+        "isbn": loan.isbn,
+        "due_date": loan.due_date.isoformat() if loan.due_date is not None else None,
+    }
+
+
 def create_app(
     user_repository: UserRepository,
     loan_repository: LoanRepository,
@@ -101,6 +112,7 @@ def create_app(
     create_user = CreateUser(user_repository)
     borrow_book = BorrowBook(user_repository, loan_repository, event_publisher)
     list_user_loans = ListUserLoans(loan_repository)
+    list_overdue_loans = ListOverdueLoans(loan_repository)
     return_book = ReturnBook(loan_repository, event_publisher)
 
     @app.post("/users", status_code=201)
@@ -120,6 +132,11 @@ def create_app(
         except UserNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return _loan_payload(loan)
+
+    @app.get("/loans/overdue")
+    def list_overdue_endpoint() -> list[dict[str, object]]:
+        """List all overdue loans (200 with an empty list when none are overdue)."""
+        return [_overdue_entry(loan) for loan in list_overdue_loans()]
 
     @app.get("/loans/{loan_id}")
     def get_loan_endpoint(loan_id: str) -> dict[str, object]:

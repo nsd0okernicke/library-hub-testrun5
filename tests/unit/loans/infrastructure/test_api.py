@@ -6,6 +6,22 @@ from loans.domain.user import User
 from loans.infrastructure.api.main import create_app
 
 
+class InMemoryLoanRepository:
+    """In-memory fake of the LoanRepository port for API unit tests."""
+
+    def __init__(self) -> None:
+        self.loans: dict[str, object] = {}
+
+    def save(self, loan: object) -> None:
+        self.loans[loan.loan_id] = loan  # type: ignore[attr-defined]
+
+    def get_by_id(self, loan_id: str) -> object | None:
+        return self.loans.get(loan_id)
+
+    def count(self) -> int:
+        return len(self.loans)
+
+
 class InMemoryUserRepository:
     """In-memory fake of the UserRepository port for API unit tests."""
 
@@ -28,7 +44,8 @@ class InMemoryUserRepository:
 class TestCreateUserApi:
     def setup_method(self) -> None:
         self.repository = InMemoryUserRepository()
-        self.app = create_app(self.repository)
+        self.loan_repository = InMemoryLoanRepository()
+        self.app = create_app(self.repository, self.loan_repository)
         self.client = TestClient(self.app)
 
     def test_create_user_returns_201_with_generated_id(self) -> None:

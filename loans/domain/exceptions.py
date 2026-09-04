@@ -28,6 +28,15 @@ class LoanNotFound(Exception):
         self.loan_id = loan_id
 
 
+class LoanNotActive(Exception):
+    """Raised when a book is returned for a loan that is not ACTIVE."""
+
+    def __init__(self, loan_id: str) -> None:
+        """Store the offending loan id in the message."""
+        super().__init__(f"Loan {loan_id} is not ACTIVE and cannot be returned")
+        self.loan_id = loan_id
+
+
 class LoanNotPending(Exception):
     """Raised when a reservation outcome is applied to an already decided loan."""
 

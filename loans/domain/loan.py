@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
-from loans.domain.exceptions import LoanNotPending
+from loans.domain.exceptions import LoanNotActive, LoanNotPending
 
 
 class LoanStatus(Enum):
@@ -13,6 +13,7 @@ class LoanStatus(Enum):
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     REJECTED = "REJECTED"
+    RETURNED = "RETURNED"
 
 
 class ReservationDecision(Enum):
@@ -33,8 +34,9 @@ class Loan:
 
     A loan starts PENDING when the borrow request is accepted. The reservation
     outcome arrives later, asynchronously: ACTIVE sets the due date from the
-    global due date term, REJECTED ends the loan without a due date. A decided
-    loan (ACTIVE or REJECTED) is terminal and stays queryable.
+    global due date term, REJECTED ends the loan without a due date. An ACTIVE
+    loan can be returned at any time — overdue or not — which ends it as
+    RETURNED. Every decided or returned loan stays queryable.
     """
 
     loan_id: str
@@ -56,6 +58,11 @@ class Loan:
             raise ValueError("An ACTIVE loan must have a due date")
         if self.status is not LoanStatus.ACTIVE and self.due_date is not None:
             raise ValueError("Only an ACTIVE loan may have a due date")
+
+    def _require_active(self) -> None:
+        """Raise LoanNotActive when the loan is not an open (ACTIVE) loan."""
+        if self.status is not LoanStatus.ACTIVE:
+            raise LoanNotActive(self.loan_id)
 
     def _require_pending(self) -> None:
         """Raise LoanNotPending when a reservation outcome was already decided."""
@@ -84,3 +91,13 @@ class Loan:
         """
         self._require_pending()
         return replace(self, status=LoanStatus.REJECTED)
+
+    def mark_returned(self) -> "Loan":
+        """Return a copy of this ACTIVE loan as RETURNED (due date cleared).
+
+        The return never checks overdue status: an ACTIVE loan past its due
+        date is returned just like one before its due date. Raises
+        LoanNotActive when the loan is PENDING, REJECTED or already RETURNED.
+        """
+        self._require_active()
+        return replace(self, status=LoanStatus.RETURNED, due_date=None)

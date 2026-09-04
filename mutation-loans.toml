@@ -1,0 +1,8 @@
+[cosmic-ray]
+module-path = "loans"
+timeout = 60.0
+excluded-modules = ['loans/infrastructure/**/*.py']
+test-command = "../../.venv/Scripts/python.exe -m pytest tests/unit -x -q"
+
+[cosmic-ray.distributor]
+name = "local"

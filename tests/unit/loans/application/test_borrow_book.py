@@ -133,3 +133,11 @@ class TestBorrowBook:
         )
         loan = use_case(user_email="bob@example.com", isbn="978-3-16-148410-0")
         assert loan.created_at == fixed
+
+    def test_init_annotations_resolve(self) -> None:
+        """Force annotation evaluation so `Callable[[], datetime] | None` is checked (PEP 649)."""
+        import typing
+        from collections.abc import Callable
+
+        hints = typing.get_type_hints(BorrowBook.__init__)
+        assert hints["clock"] == (Callable[[], datetime] | None)

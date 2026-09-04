@@ -1,5 +1,6 @@
 """Unit tests for the Loan domain entity (pure Python, no I/O)."""
 
+from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta
 
 import pytest
@@ -22,6 +23,14 @@ def _pending_loan(**overrides: object) -> Loan:
 
 
 class TestLoanInvariants:
+    def test_loan_is_immutable(self) -> None:
+        """Loan is a frozen value object: attribute assignment must fail."""
+        loan = _pending_loan()
+        with pytest.raises(FrozenInstanceError):
+            loan.loan_id = "other"  # type: ignore[misc]
+        with pytest.raises(FrozenInstanceError):
+            loan.status = LoanStatus.ACTIVE  # type: ignore[misc]
+
     def test_pending_loan_has_no_due_date(self) -> None:
         loan = _pending_loan()
         assert loan.status is LoanStatus.PENDING
@@ -70,6 +79,13 @@ class TestLoanActivation:
             loan.activate(due_date_term_days=0)
         with pytest.raises(ValueError):
             loan.activate(due_date_term_days=-3)
+
+    def test_activate_with_minimum_term_of_one_day_is_accepted(self) -> None:
+        created = datetime(2026, 3, 1, 9, 30, 0)
+        loan = _pending_loan(created_at=created)
+        active = loan.activate(due_date_term_days=1)
+        assert active.status is LoanStatus.ACTIVE
+        assert active.due_date == created + timedelta(days=1)
 
 
 class TestLoanRejection:

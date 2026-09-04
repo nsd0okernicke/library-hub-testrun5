@@ -35,7 +35,9 @@ def test_loan_repository_is_abstract() -> None:
     """The LoanRepository port cannot be instantiated; all methods must be abstract."""
     with pytest.raises(TypeError):
         LoanRepository()  # type: ignore[abstract]
-    assert LoanRepository.__abstractmethods__ == frozenset({"save", "get_by_id", "count"})
+    assert LoanRepository.__abstractmethods__ == frozenset(
+        {"save", "get_by_id", "list_for_user", "count"}
+    )
 
 
 def test_loan_repository_get_by_id_annotation_resolves() -> None:

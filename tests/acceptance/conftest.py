@@ -87,6 +87,9 @@ def request_borrow(loan_client, scenario_state, name, isbn):
 def decide_reservation(loan_client, scenario_state, decision):
     """Shared step: apply the reservation outcome to the borrow response's loan."""
     loan_id = scenario_state["response"].json()["loan_id"]
+    if decision == "PENDING":
+        # Nothing to decide: the loan simply stays PENDING as created.
+        return
     response = loan_client.post(f"/loans/{loan_id}/reservation", json={"decision": decision})
     assert response.status_code == 200, response.text
 

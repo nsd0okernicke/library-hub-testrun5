@@ -52,6 +52,28 @@ def user_exists(loan_client, scenario_state, name, email):
     scenario_state.setdefault("users", {})[name] = response.json()
 
 
+@given("the catalog service is running")
+def catalog_service_running(client):
+    """Shared Background step: the TestClient is wired to the catalog service."""
+    assert client is not None
+
+
+@given(parsers.parse("a book with ISBN {isbn} is already registered"))
+def book_already_registered(client, isbn):
+    """Shared step: register a book with default metadata and stock 3."""
+    response = client.post(
+        "/books",
+        json={
+            "isbn": isbn,
+            "title": "Already There",
+            "author": "Some Author",
+            "genre": "Mystery",
+            "stock": 3,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
 @given(parsers.parse("a book with ISBN {isbn} is registered in the catalog"))
 def book_registered_in_catalog(client, isbn):
     """Shared step: register a book in the catalog service."""

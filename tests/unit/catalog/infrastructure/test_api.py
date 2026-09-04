@@ -224,3 +224,57 @@ class TestSearchBooksApi:
     def test_invalid_pagination_returns_422(self) -> None:
         assert self.client.get("/books", params={"page": 0}).status_code == 422
         assert self.client.get("/books", params={"page_size": 0}).status_code == 422
+
+
+class TestCheckAvailabilityApi:
+    def setup_method(self) -> None:
+        self.repository = InMemoryBookRepository()
+        self.app = create_app(self.repository)
+        self.client = TestClient(self.app)
+        self.repository.save(
+            Book(
+                isbn="978-0-20-163361-0",
+                title="Dune",
+                author="Frank Herbert",
+                genre="Sci-Fi",
+                description="Arrakis saga",
+                stock=3,
+            )
+        )
+
+    def test_availability_returns_200_with_isbn_and_available_count(self) -> None:
+        response = self.client.get("/books/978-0-20-163361-0/availability")
+        assert response.status_code == 200
+        assert response.json() == {
+            "isbn": "978-0-20-163361-0",
+            "available_count": 3,
+        }
+
+    def test_availability_reports_zero_stock(self) -> None:
+        self.repository.save(
+            Book(
+                isbn="978-0-13-468599-1",
+                title="Refactoring",
+                author="Martin Fowler",
+                genre="Software",
+                description=None,
+                stock=0,
+            )
+        )
+        response = self.client.get("/books/978-0-13-468599-1/availability")
+        assert response.status_code == 200
+        assert response.json()["available_count"] == 0
+
+    def test_availability_contains_no_other_book_details(self) -> None:
+        body = self.client.get("/books/978-0-20-163361-0/availability").json()
+        assert set(body) == {"isbn", "available_count"}
+
+    def test_availability_of_unknown_isbn_returns_404(self) -> None:
+        response = self.client.get("/books/978-1-40-289462-6/availability")
+        assert response.status_code == 404
+        assert "isbn" not in response.json()
+
+    def test_availability_of_unknown_isbn_returns_no_availability_data(self) -> None:
+        body = self.client.get("/books/978-1-40-289462-6/availability").json()
+        assert "isbn" not in body
+        assert "available_count" not in body

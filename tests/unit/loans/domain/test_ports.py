@@ -36,7 +36,7 @@ def test_loan_repository_is_abstract() -> None:
     with pytest.raises(TypeError):
         LoanRepository()  # type: ignore[abstract]
     assert LoanRepository.__abstractmethods__ == frozenset(
-        {"save", "get_by_id", "list_for_user", "count"}
+        {"save", "get_by_id", "list_for_user", "list_overdue", "count"}
     )
 
 

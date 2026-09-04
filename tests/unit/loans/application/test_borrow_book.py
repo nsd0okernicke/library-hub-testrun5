@@ -42,6 +42,9 @@ class FakeLoanRepository:
     def get_by_id(self, loan_id: str) -> Loan | None:
         return self.loans.get(loan_id)
 
+    def list_overdue(self, now: datetime) -> list[Loan]:
+        return [loan for loan in self.loans.values() if loan.is_overdue(now)]
+
     def count(self) -> int:
         return len(self.loans)
 

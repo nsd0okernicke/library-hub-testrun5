@@ -42,6 +42,9 @@ class InMemoryLoanRepository:
         newest_first = sorted(owned, key=lambda loan: loan.created_at, reverse=True)
         return newest_first[query.offset : query.offset + query.page_size]
 
+    def list_overdue(self, now: datetime) -> list[Loan]:
+        return [loan for loan in self.loans if loan.is_overdue(now)]
+
 
 class InMemoryUserRepository:
     """In-memory fake of the UserRepository port."""

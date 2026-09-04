@@ -2,15 +2,33 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from pytest_bdd import parsers, then
+from pytest_bdd import given, parsers, then
 from sqlalchemy import create_engine
 from testcontainers.community.postgres import PostgresContainer
 
 from catalog.infrastructure.api.main import create_app
 from catalog.infrastructure.persistence import Base, SqlAlchemyBookRepository
 from loans.infrastructure.api.main import create_app as create_loans_app
+from loans.infrastructure.config import LoanSettings
 from loans.infrastructure.persistence import Base as LoansBase
-from loans.infrastructure.persistence import SqlAlchemyUserRepository
+from loans.infrastructure.persistence import SqlAlchemyLoanRepository, SqlAlchemyUserRepository
+
+
+class RecordingEventPublisher:
+    """EventPublisher adapter that records events for acceptance assertions."""
+
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def publish(self, event: object) -> None:
+        """Record the published event."""
+        self.events.append(event)
+
+
+@given("the loan service is running")
+def loan_service_running(loan_client):
+    """Shared Background step: the TestClient is wired to the loans service by the fixture."""
+    assert loan_client is not None
 
 
 @pytest.fixture()
@@ -65,9 +83,15 @@ def loan_client(postgres_container):
     engine = create_engine(url)
     LoansBase.metadata.drop_all(engine)
     LoansBase.metadata.create_all(engine)
-    repository = SqlAlchemyUserRepository(engine)
-    app = create_loans_app(repository)
+    user_repository = SqlAlchemyUserRepository(engine)
+    loan_repository = SqlAlchemyLoanRepository(engine)
+    settings = LoanSettings()
+    publisher = RecordingEventPublisher()
+    app = create_loans_app(user_repository, loan_repository, publisher=publisher, settings=settings)
     with TestClient(app) as test_client:
-        test_client.repository = repository  # type: ignore[attr-defined]
+        test_client.repository = user_repository  # type: ignore[attr-defined]
+        test_client.loan_repository = loan_repository  # type: ignore[attr-defined]
+        test_client.settings = settings  # type: ignore[attr-defined]
+        test_client.events = publisher.events  # type: ignore[attr-defined]
         yield test_client
     engine.dispose()

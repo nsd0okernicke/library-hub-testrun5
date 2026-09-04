@@ -15,12 +15,6 @@ FEATURES_DIR = Path(__file__).resolve().parents[3] / "features"
 scenarios(str(FEATURES_DIR / "loan-0-create-user-account.feature"))
 
 
-@given("the loan service is running")
-def loan_service_running(loan_client):
-    """Background: the TestClient is wired to the loans service by the fixture."""
-    assert loan_client is not None
-
-
 @given(parsers.parse("a user with email {email} already exists"))
 def user_with_email_exists(loan_client, email):
     response = loan_client.post("/users", json={"name": "Existing Patron", "email": email})

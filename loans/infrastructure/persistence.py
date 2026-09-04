@@ -1,10 +1,13 @@
-"""SQLAlchemy persistence for loan user accounts."""
+"""SQLAlchemy persistence for loan user accounts and loans."""
 
-from sqlalchemy import String, func, select
+from datetime import datetime
+
+from sqlalchemy import DateTime, String, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from loans.domain.ports import UserRepository
+from loans.domain.loan import Loan, LoanStatus
+from loans.domain.ports import LoanRepository, UserRepository
 from loans.domain.user import User
 
 
@@ -58,3 +61,65 @@ class SqlAlchemyUserRepository(UserRepository):
         """Return the total number of registered users."""
         with Session(self._engine) as session:
             return session.execute(select(func.count()).select_from(UserModel)).scalar_one()
+
+
+class LoanModel(Base):
+    """Table model for loans (one row per loan_id; a user may hold several loans)."""
+
+    __tablename__ = "loans"
+
+    loan_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    isbn: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def to_domain(self) -> Loan:
+        """Convert the row into the domain Loan entity."""
+        return Loan(
+            loan_id=self.loan_id,
+            user_id=self.user_id,
+            isbn=self.isbn,
+            status=LoanStatus(self.status),
+            created_at=self.created_at,
+            due_date=self.due_date,
+        )
+
+    @staticmethod
+    def from_domain(loan: Loan) -> "LoanModel":
+        """Convert a domain Loan entity into a table row."""
+        return LoanModel(
+            loan_id=loan.loan_id,
+            user_id=loan.user_id,
+            isbn=loan.isbn,
+            status=loan.status.value,
+            created_at=loan.created_at,
+            due_date=loan.due_date,
+        )
+
+
+class SqlAlchemyLoanRepository(LoanRepository):
+    """LoanRepository backed by a SQLAlchemy engine (one session per call)."""
+
+    def __init__(self, engine: Engine) -> None:
+        """Store the SQLAlchemy engine used for persistence."""
+        self._engine = engine
+
+    def save(self, loan: Loan) -> None:
+        """Insert a new loan or update the existing row for its loan_id."""
+        with Session(self._engine) as session, session.begin():
+            session.merge(LoanModel.from_domain(loan))
+
+    def get_by_id(self, loan_id: str) -> Loan | None:
+        """Return the loan for a loan_id, or None (any status is queryable)."""
+        with Session(self._engine) as session:
+            row = session.execute(
+                select(LoanModel).where(LoanModel.loan_id == loan_id)
+            ).scalar_one_or_none()
+            return row.to_domain() if row is not None else None
+
+    def count(self) -> int:
+        """Return the total number of stored loans."""
+        with Session(self._engine) as session:
+            return session.execute(select(func.count()).select_from(LoanModel)).scalar_one()

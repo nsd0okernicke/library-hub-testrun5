@@ -1,0 +1,1 @@
+"""Loans HTTP API (FastAPI)."""

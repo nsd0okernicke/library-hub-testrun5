@@ -10,3 +10,12 @@ class BorrowRequested:
     loan_id: str
     user_id: str
     isbn: str
+
+
+@dataclass(frozen=True)
+class BookReturned:
+    """Published when an ACTIVE loan is returned (the book is back)."""
+
+    loan_id: str
+    user_id: str
+    isbn: str

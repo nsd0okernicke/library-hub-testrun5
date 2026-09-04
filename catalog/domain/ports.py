@@ -3,6 +3,7 @@
 import abc
 
 from catalog.domain.book import Book
+from catalog.domain.search import BookSearchCriteria, BookSearchResult
 
 
 class BookRepository(abc.ABC):
@@ -19,3 +20,7 @@ class BookRepository(abc.ABC):
     @abc.abstractmethod
     def count_by_isbn(self, isbn: str) -> int:
         """Return how many books are registered under an ISBN."""
+
+    @abc.abstractmethod
+    def search(self, criteria: BookSearchCriteria) -> BookSearchResult:
+        """Search books by case-insensitive substring filters (AND), title ascending, paginated."""

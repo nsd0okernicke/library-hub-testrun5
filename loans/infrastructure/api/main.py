@@ -3,13 +3,14 @@
 import os
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
 from loans.application.borrow_book import BorrowBook
 from loans.application.create_user import CreateUser
 from loans.application.decide_reservation import DecideReservation
+from loans.application.list_user_loans import ListUserLoans
 from loans.domain.exceptions import (
     EmailAlreadyRegistered,
     LoanNotFound,
@@ -19,6 +20,7 @@ from loans.domain.exceptions import (
 from loans.domain.loan import Loan, ReservationDecision
 from loans.domain.ports import EventPublisher, LoanRepository, UserRepository
 from loans.domain.user import User
+from loans.domain.user_loans import DEFAULT_PAGE_SIZE
 from loans.infrastructure.config import DEFAULT_DUE_DATE_TERM_DAYS, LoanSettings
 from loans.infrastructure.events import NullEventPublisher
 from loans.infrastructure.persistence import (
@@ -65,6 +67,16 @@ def _loan_payload(loan: Loan) -> dict[str, object]:
     }
 
 
+def _loan_entry(loan: Loan) -> dict[str, object]:
+    """Serialize a loan into a user loan listing entry (datetimes as ISO 8601)."""
+    return {
+        "loan_id": loan.loan_id,
+        "isbn": loan.isbn,
+        "status": loan.status.value,
+        "due_date": loan.due_date.isoformat() if loan.due_date is not None else None,
+    }
+
+
 def create_app(
     user_repository: UserRepository,
     loan_repository: LoanRepository,
@@ -86,6 +98,7 @@ def create_app(
     event_publisher: EventPublisher = publisher or NullEventPublisher()
     create_user = CreateUser(user_repository)
     borrow_book = BorrowBook(user_repository, loan_repository, event_publisher)
+    list_user_loans = ListUserLoans(loan_repository)
 
     @app.post("/users", status_code=201)
     def create_user_endpoint(request: CreateUserRequest) -> dict[str, str]:
@@ -126,6 +139,21 @@ def create_app(
         except LoanNotPending as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return _loan_payload(loan)
+
+    @app.get("/users/{user_id}/loans")
+    def list_user_loans_endpoint(
+        user_id: str,
+        page: int | None = Query(default=None, ge=1),
+        page_size: int | None = Query(default=None, ge=1),
+    ) -> dict[str, object]:
+        """List the user's loans newest first, paginated (200, empty beyond last page)."""
+        loan_page = list_user_loans(user_id, page or 1, page_size or DEFAULT_PAGE_SIZE)
+        return {
+            "user_id": user_id,
+            "page": loan_page.page,
+            "page_size": loan_page.page_size,
+            "loans": [_loan_entry(loan) for loan in loan_page.loans],
+        }
 
     @app.get("/health")
     def health() -> dict[str, str]:

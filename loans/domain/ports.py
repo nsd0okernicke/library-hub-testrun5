@@ -4,6 +4,7 @@ import abc
 
 from loans.domain.loan import Loan
 from loans.domain.user import User
+from loans.domain.user_loans import UserLoanQuery
 
 
 class UserRepository(abc.ABC):
@@ -36,6 +37,10 @@ class LoanRepository(abc.ABC):
     @abc.abstractmethod
     def get_by_id(self, loan_id: str) -> Loan | None:
         """Return the loan for a loan_id, or None (any status is queryable)."""
+
+    @abc.abstractmethod
+    def list_for_user(self, query: UserLoanQuery) -> list[Loan]:
+        """Return one user's loans, newest first (ties broken by loan_id asc)."""
 
     @abc.abstractmethod
     def count(self) -> int:

@@ -35,8 +35,7 @@ jobs:
           warn_only=0
           for f in \
             pyproject.toml \
-            .github/workflows/ci.yml \
-            kiln/project/profiles.json
+            .github/workflows/ci.yml
           do
             if [ ! -f "$f" ]; then
               echo "::error::MISSING (framework-shipped): $f"
@@ -44,6 +43,7 @@ jobs:
             fi
           done
           for f in \
+            kiln/project/profiles.json \
             mutation-catalog.toml \
             mutation-loans.toml \
             .mutation-scores.json \

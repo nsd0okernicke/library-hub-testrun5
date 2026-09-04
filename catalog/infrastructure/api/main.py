@@ -7,7 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine
 
 from catalog.application.create_book import CreateBook
-from catalog.domain.exceptions import BookAlreadyExists
+from catalog.application.retrieve_book import RetrieveBook
+from catalog.domain.book import Book
+from catalog.domain.exceptions import BookAlreadyExists, BookNotFound
 from catalog.domain.ports import BookRepository
 from catalog.infrastructure.persistence import Base, SqlAlchemyBookRepository
 
@@ -23,10 +25,32 @@ class CreateBookRequest(BaseModel):
     stock: int
 
 
+def _book_payload(book: Book) -> dict[str, object]:
+    """Serialize a book into the API response body."""
+    return {
+        "isbn": book.isbn,
+        "title": book.title,
+        "author": book.author,
+        "genre": book.genre,
+        "description": book.description,
+        "stock": book.stock,
+    }
+
+
 def create_app(repository: BookRepository) -> FastAPI:
     """Build the catalog FastAPI application around the given repository."""
     app = FastAPI(title="Catalog Service")
     create_book = CreateBook(repository)
+    retrieve_book = RetrieveBook(repository)
+
+    @app.get("/books/{isbn}")
+    def retrieve_book_endpoint(isbn: str) -> dict[str, object]:
+        """Return the registered book for an ISBN (404 when unregistered)."""
+        try:
+            book = retrieve_book(isbn)
+        except BookNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _book_payload(book)
 
     @app.post("/books", status_code=201)
     def create_book_endpoint(request: CreateBookRequest) -> dict[str, object]:
@@ -42,14 +66,7 @@ def create_app(repository: BookRepository) -> FastAPI:
             )
         except BookAlreadyExists as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return {
-            "isbn": book.isbn,
-            "title": book.title,
-            "author": book.author,
-            "genre": book.genre,
-            "description": book.description,
-            "stock": book.stock,
-        }
+        return _book_payload(book)
 
     @app.get("/health")
     def health() -> dict[str, str]:
